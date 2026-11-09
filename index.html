@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="pt-BR"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#183f5d"><title>Precificação SILK</title>
+<link rel="manifest" href="./manifest.json">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>body{font-family:system-ui;background:#f1f4f7;color:#1e293b}input,select,button{font:inherit}input,select{padding:10px;border:1px solid #cbd5e1;border-radius:9px;width:100%}button{border-radius:9px;padding:11px 14px;font-weight:650}.card{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:16px;margin:12px 0}.muted{font-size:12px;color:#64748b}label{font-size:13px;font-weight:600} .price{font-size:24px;font-weight:800;color:#183f5d}</style>
+</head><body class="max-w-3xl mx-auto p-3">
+<header class="bg-[#183f5d] text-white rounded-2xl p-5">
+<h1 class="text-2xl font-extrabold">PRECIFICAÇÃO SILK</h1><p class="text-sm opacity-80">Calculadora de saída e orçamentos</p>
+<button id="install" class="bg-emerald-600 mt-3">Instalar aplicativo</button>
+</header>
+<section class="card"><h2 class="font-bold text-lg mb-3">1. Dados do pedido</h2>
+<div class="grid grid-cols-2 gap-3"><div><label>Quantidade</label><input id="q" type="number" min="1" value="50"></div><div><label>Cor do tecido</label><select id="cloth"><option value="0">Clara</option><option value="1">Escura</option></select></div><div class="col-span-2"><label>Fotolito (m²)</label><input id="area" type="number" min="0" step=".01" value="0"></div></div></section>
+<section class="card"><h2 class="font-bold text-lg mb-3">2. Composição da camisa</h2><div id="positions" class="grid sm:grid-cols-2 gap-3"></div>
+<label class="flex gap-2 items-start mt-4"><input id="same" type="checkbox" style="width:auto"> <span>Mesma arte nas duas mangas (impressão duas vezes; gravação uma vez)</span></label></section>
+<section class="card"><h2 class="font-bold text-lg mb-3">3. Resultado do orçamento</h2><div id="details" class="text-sm space-y-2"></div><div class="bg-[#183f5d] text-white rounded-xl p-4 mt-4"><div class="muted text-white">TOTAL DO PEDIDO</div><div id="total" class="text-3xl font-bold">R$ 0,00</div><div class="mt-2 muted text-white">PREÇO POR CAMISA</div><div id="unit" class="text-2xl font-bold">R$ 0,00</div></div>
+<div class="flex flex-wrap gap-2 mt-4"><button id="copy" class="bg-[#245f85] text-white">Copiar orçamento</button><button onclick="print()" class="bg-slate-800 text-white">Salvar PDF</button><button id="clear" class="bg-slate-200">Limpar</button></div></section>
+<section class="card"><h2 class="font-bold mb-2">Valores padrão e telas</h2><p class="muted mb-3">Você pode alterar os valores. As mudanças ficam salvas neste aparelho.</p><div id="config" class="space-y-2"></div><button id="save" class="bg-emerald-600 text-white mt-3">Salvar valores</button><button id="restore" class="bg-slate-200 mt-3">Restaurar padrão</button></section>
+<script>
+const base={A5:{pc:[.75,1],c2:[.15,.25],t:[2,1]},A4:{pc:[1.5,2],c2:[.35,.45],t:[4,2]},A3:{pc:[2.5,3],c2:[.5,.55],t:[5.5,2.5]},A2:{pc:[3.5,4],c2:[.6,.65],t:[7,3]},A1:{pc:[4.5,5],c2:[.7,.75],t:[9,4]},A0:{pc:[5.5,6],c2:[1,1.25],t:[12,5]}};
+let prices=JSON.parse(localStorage.silkPrices||"null")||structuredClone(base);
+const places=[["front","Frente","A4",true],["back","Costas","A3",false],["right","Manga direita","A5",false],["left","Manga esquerda","A5",false]];
+const $=id=>document.getElementById(id), money=n=>n.toLocaleString("pt-BR",{style:"currency",currency:"BRL"});
+function build(){
+ $("positions").innerHTML=places.map(([id,name,size,on])=>`<div class="border rounded-xl p-3"><label class="flex items-center gap-2"><input id="on_${id}" type="checkbox" style="width:auto" ${on?"checked":""}>${name}</label><label>Referência da arte</label><input id="ref_${id}" placeholder="Nome ou referência"><div class="grid grid-cols-2 gap-2 mt-2"><div><label>Tamanho</label><select id="size_${id}">${Object.keys(prices).map(s=>`<option ${s===size?"selected":""}>${s}</option>`)}</select></div><div><label>Cores</label><input id="colors_${id}" type="number" min="1" value="1"></div></div><p class="muted mt-2" id="val_${id}"></p></div>`).join("");
+ $("config").innerHTML=Object.entries(prices).map(([s,v])=>`<div class="border rounded-lg p-2"><b>${s}</b><div class="grid grid-cols-3 gap-2 text-xs"><label>1ª clara<input id="${s}_p0" type="number" step=".01" value="${v.pc[0]}"></label><label>1ª escura<input id="${s}_p1" type="number" step=".01" value="${v.pc[1]}"></label><label>Extra clara<input id="${s}_c0" type="number" step=".01" value="${v.c2[0]}"></label><label>Extra escura<input id="${s}_c1" type="number" step=".01" value="${v.c2[1]}"></label><label>Tela base<input id="${s}_t0" type="number" step=".01" value="${v.t[0]}"></label><label>Tela extra<input id="${s}_t1" type="number" step=".01" value="${v.t[1]}"></label></div></div>`).join("");
+ document.querySelectorAll("input,select").forEach(el=>el.addEventListener("input",calc));calc();
+}
+function calc(){
+ let q=Math.max(0,+$("q").value||0),cloth=+$("cloth").value,area=Math.max(0,+$("area").value||0),active=[],printUnit=0,screen=0,screenCount=0;
+ places.forEach(([id,name])=>{if(!$("on_"+id).checked)return;let size=$("size_"+id).value,c=Math.max(1,+$("colors_"+id).value||1),ref=$("ref_"+id).value.trim(),v=prices[size];let p=v.pc[cloth]+(c-1)*v.c2[cloth];printUnit+=p;active.push({id,name,size,c,ref,p,screen:v.t[0]+(c-1)*v.t[1]});$("val_"+id).textContent="Impressão: "+money(p)+" por camisa";});
+ let screens=[...active];if($("same").checked&&screens.some(x=>x.id==="right")&&screens.some(x=>x.id==="left"))screens=screens.filter(x=>x.id!=="left");
+ if(q<50){screens.forEach(x=>{screen+=x.screen;screenCount+=x.c;});}else screens.forEach(x=>screenCount+=x.c);
+ let printing=printUnit*q,film=area*100,sub=printing+screen+film,discount=q>=200?.10:q>=100?.05:0,off=sub*discount,total=sub-off,unit=q?total/q:0;
+ $("details").innerHTML=[["Impressão por camisa",money(printUnit)],["Total de impressão",money(printing)],["Gravação das telas ("+screenCount+" telas)",money(screen)],["Fotolito",money(film)],["Subtotal",money(sub)],["Desconto ("+discount*100+"%)","− "+money(off)]].map(x=>`<div class="flex justify-between border-b py-2"><span>${x[0]}</span><b>${x[1]}</b></div>`).join("");
+ $("total").textContent=money(total);$("unit").textContent=money(unit);
+ window.quote={q,cloth:cloth?"Escura":"Clara",active,total,unit,area,printing,screen,film,discount};
+}
+$("save").onclick=()=>{Object.keys(prices).forEach(s=>{prices[s]={pc:[+$(`${s}_p0`).value||0,+$(`${s}_p1`).value||0],c2:[+$(`${s}_c0`).value||0,+$(`${s}_c1`).value||0],t:[+$(`${s}_t0`).value||0,+$(`${s}_t1`).value||0]};});localStorage.silkPrices=JSON.stringify(prices);build();};
+$("restore").onclick=()=>{prices=structuredClone(base);localStorage.removeItem("silkPrices");build();};
+$("clear").onclick=()=>{ $("q").value=50;$("cloth").value=0;$("area").value=0;$("same").checked=false;places.forEach(([id,,size,on])=>{$("on_"+id).checked=on;$("size_"+id).value=size;$("colors_"+id).value=1;$("ref_"+id).value="";});calc();};
+$("copy").onclick=async()=>{let d=window.quote;let list=d.active.map(a=>`${a.name}: ${a.size}, ${a.c} cor(es)${a.ref?" — "+a.ref:""}`).join("\n");let msg=`ORÇAMENTO SILK\nQuantidade: ${d.q}\nTecido: ${d.cloth}\n${list}\nTotal: ${money(d.total)}\nPor camisa: ${money(d.unit)}`;try{await navigator.clipboard.writeText(msg);alert("Orçamento copiado.");}catch(e){alert(msg);}};
+let deferred=null;window.addEventListener("beforeinstallprompt",e=>{e.preventDefault();deferred=e;});
+$("install").onclick=()=>deferred?deferred.prompt():alert("No Chrome, abra o menu ⋮ e escolha Instalar aplicativo ou Adicionar à tela inicial.");
+build();
+if("serviceWorker" in navigator) addEventListener("load",()=>navigator.serviceWorker.register("./service-worker.js"));
+</script></body></html>

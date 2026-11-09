@@ -1,0 +1,5 @@
+PRECIFICAÇÃO SILK — PWA
+
+Envie todos os arquivos desta pasta para a raiz de um repositório GitHub e ative Settings > Pages > Deploy from a branch > main > /(root). Depois abra o endereço HTTPS no Chrome do Android e escolha Instalar aplicativo.
+
+A hospedagem precisa ser HTTPS. A calculadora guarda os valores ajustados no armazenamento do navegador. A primeira abertura exige internet. Esta versão mantém os valores e regras do HTML fornecido. Faça testes dos orçamentos antes de usar comercialmente.
